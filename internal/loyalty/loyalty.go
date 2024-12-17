@@ -20,11 +20,18 @@ var (
 
 type LoyaltyStorager interface {
 	AddOrder(ctx context.Context, userID string, orderInfo *accrual.OrderInfo) error
-	GetOrders(ctx context.Context, userID string) ([]*OrderRecord, error)
+	GetOrders(ctx context.Context, userID string) ([]*Order, error)
 }
 
 type LoyaltyStoragePg struct {
 	db *sql.DB
+}
+
+func NewLoyaltyStoragePg(db *sql.DB) LoyaltyStorager {
+
+	return &LoyaltyStoragePg{
+		db: db,
+	}
 }
 
 func (l *LoyaltyStoragePg) AddOrder(ctx context.Context, userID string, orderInfo *accrual.OrderInfo) error {
@@ -38,13 +45,20 @@ func (l *LoyaltyStoragePg) AddOrder(ctx context.Context, userID string, orderInf
 	return nil
 }
 
-func (l *LoyaltyStoragePg) GetOrders(ctx context.Context, userID string) ([]*OrderRecord, error) {
+func (l *LoyaltyStoragePg) GetOrders(ctx context.Context, userID string) ([]*Order, error) {
 	return nil, nil
 }
 
 type Loyalty struct {
 	accrual accrual.Accrualler
 	storage LoyaltyStorager
+}
+
+func NewLoyalty(accrual accrual.Accrualler, storage LoyaltyStorager) *Loyalty {
+	return &Loyalty{
+		accrual: accrual,
+		storage: storage,
+	}
 }
 
 func (l *Loyalty) UploadOrder(ctx context.Context, userID string, orderID int64) error {
@@ -63,6 +77,6 @@ func (l *Loyalty) UploadOrder(ctx context.Context, userID string, orderID int64)
 	return l.storage.AddOrder(ctx, userID, orderInfo)
 }
 
-func (l *Loyalty) GetOrders(ctx context.Context, userID string) ([]*OrderRecord, error) {
+func (l *Loyalty) GetOrders(ctx context.Context, userID string) ([]*Order, error) {
 	return l.storage.GetOrders(ctx, userID)
 }

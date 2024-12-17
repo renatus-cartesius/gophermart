@@ -12,8 +12,8 @@ services:
       - 15432:5432
     environment:
       POSTGRES_PASSWORD: dummy
-      POSTGRES_USER: metricserv_owner
-      POSTGRES_DB: metricserv
+      POSTGRES_USER: gophermart_owner
+      POSTGRES_DB: gophermart
 
 networks:
   dev_net:
