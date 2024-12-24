@@ -13,7 +13,8 @@ const (
 )
 
 var (
-	ErrOrderNotFound = errors.New("the order wasn`t registered in accrual")
+	ErrOrderNotFound     = errors.New("the order wasn`t registered in accrual")
+	ErrOrderNotProcessed = errors.New("the order isn`t processed")
 )
 
 type OrderInfo struct {

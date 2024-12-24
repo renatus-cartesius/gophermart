@@ -208,7 +208,7 @@ func TestLoyalty_GetOrders(t *testing.T) {
 			args: args{
 				userID: "5c18f4b8-bbb8-11ef-bd1a-8bd0750e0c51",
 			},
-			want: "[{\"number\":79927398713,\"status\":\"PROCESSED\",\"accrual\":331.3,\"uploaded\":\"2012-03-10T05:04:00Z\"}]",
+			want: "[{\"number\":3938230889,\"status\":\"PROCESSED\",\"accrual\":331.3,\"uploaded\":\"2012-03-10T05:04:00Z\"},{\"number\":79927398713,\"status\":\"PROCESSED\",\"accrual\":331.3,\"uploaded\":\"2012-03-10T05:04:00Z\"}]",
 		},
 	}
 	for _, tt := range tests {

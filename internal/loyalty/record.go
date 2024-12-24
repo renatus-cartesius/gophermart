@@ -1,6 +1,8 @@
 package loyalty
 
-import "time"
+import (
+	"time"
+)
 
 type Order struct {
 	UserID   string    `json:"-"`

@@ -20,7 +20,8 @@ func (ma MockAccrualler) GetOrder(ctx context.Context, orderID int64) (*accrual.
 }
 
 type MockLoyaltyStorager struct {
-	Records map[int64]*Order
+	Records     map[int64]*Order
+	Withdrawals map[int64]*WithdrawRequest
 }
 
 func (mls MockLoyaltyStorager) AddOrder(ctx context.Context, userID string, order *accrual.OrderInfo) error {
@@ -42,6 +43,14 @@ func (mls MockLoyaltyStorager) AddOrder(ctx context.Context, userID string, orde
 	return nil
 }
 
+func (mls MockLoyaltyStorager) GetOrder(ctx context.Context, orderID int64) (*Order, error) {
+	orderRecord, ok := mls.Records[orderID]
+	if !ok {
+		return nil, ErrOrderNotFound
+	}
+	return orderRecord, nil
+}
+
 func (mls MockLoyaltyStorager) GetOrders(ctx context.Context, userID string) ([]*Order, error) {
 	res := make([]*Order, 0)
 
@@ -52,4 +61,28 @@ func (mls MockLoyaltyStorager) GetOrders(ctx context.Context, userID string) ([]
 	}
 
 	return res, nil
+}
+
+func (mls MockLoyaltyStorager) AddWithdraw(ctx context.Context, wr *WithdrawRequest) error {
+	mls.Withdrawals[wr.OrderID] = wr
+	return nil
+}
+
+func (mls MockLoyaltyStorager) GetBalance(ctx context.Context, userID string) (*Balance, error) {
+	balance := &Balance{}
+
+	for _, v := range mls.Withdrawals {
+		if v.UserID == userID {
+			balance.Withdrawn += v.Sum
+		}
+	}
+
+	for _, v := range mls.Records {
+		if v.UserID == userID {
+			balance.Current += v.Accrual
+		}
+	}
+
+	balance.Current = balance.Current - balance.Withdrawn
+	return balance, nil
 }
