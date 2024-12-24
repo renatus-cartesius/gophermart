@@ -7,7 +7,7 @@ CREATE TABLE orders (
     userID text,
     status orderStatus,
     accrual float,
-    uploaded bigint
+    uploaded timestamp
 );
 -- +goose StatementEnd
 

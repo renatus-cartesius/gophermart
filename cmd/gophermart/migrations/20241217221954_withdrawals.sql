@@ -4,8 +4,8 @@
 CREATE TABLE withdrawals (
     orderID bigint,
     userID text,
-    amount float,
-    time bigint
+    sum float,
+    created timestamp
 );
 
 -- +goose StatementEnd

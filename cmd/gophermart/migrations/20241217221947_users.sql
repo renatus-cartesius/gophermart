@@ -1,7 +1,7 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE users (
-    id bigint PRIMARY KEY,
+    id text PRIMARY KEY,
     passwordHash text
 );
 -- +goose StatementEnd
