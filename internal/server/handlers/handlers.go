@@ -7,8 +7,11 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/renatus-cartesius/gophermart/internal/accrual"
+	"github.com/renatus-cartesius/gophermart/internal/auth"
 	"github.com/renatus-cartesius/gophermart/internal/loyalty"
 	"github.com/renatus-cartesius/gophermart/internal/server/middlewares"
 	"github.com/renatus-cartesius/gophermart/pkg/logger"
@@ -19,8 +22,14 @@ func Setup(r *chi.Mux, srv *ServerHandler) {
 
 	r.Route("/api", func(r chi.Router) {
 		r.Route("/user", func(r chi.Router) {
-			r.Get("/orders", middlewares.Gzipper(logger.RequestLogger(srv.GetOrders)))
-			r.Post("/orders", middlewares.Gzipper(logger.RequestLogger(srv.UploadOrder)))
+			r.Get("/orders", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.GetOrders))))
+			r.Post("/orders", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.UploadOrder))))
+			r.Route("/balance", func(r chi.Router) {
+				r.Get("/", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.GetBalance))))
+				r.Post("/withdraw", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.Withdraw))))
+			})
+			r.Post("/register", middlewares.Gzipper(logger.RequestLogger(srv.RegisterUser)))
+			// r.Post("/login", middlewares.Gzipper(logger.RequestLogger(srv.)))
 		})
 		// 	r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
 		// 	r.Post("/updates/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdatesJSON))))
@@ -33,16 +42,58 @@ func Setup(r *chi.Mux, srv *ServerHandler) {
 
 type ServerHandler struct {
 	l *loyalty.Loyalty
+	a auth.Auther
 }
 
-func NewServerHandler(l *loyalty.Loyalty) *ServerHandler {
+func NewServerHandler(l *loyalty.Loyalty, a auth.Auther) *ServerHandler {
 	return &ServerHandler{
 		l: l,
+		a: a,
 	}
 }
 
+func (s ServerHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
+	ar := &auth.AuthRequest{}
+	if err := json.NewDecoder(r.Body).Decode(&ar); err != nil {
+		logger.Log.Error(
+			"error on unmarshalling auth request body",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	tokenString, err := s.a.RegistrateUser(r.Context(), ar)
+	if err != nil {
+		if errors.Is(err, auth.ErrUserAlreadyExists) {
+			logger.Log.Error(
+				"trying to register user with already registered login",
+				zap.Error(err),
+			)
+			w.WriteHeader(http.StatusConflict)
+			return
+		} else {
+			logger.Log.Error(
+				"error when registering user",
+				zap.Error(err),
+			)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	authCookie := http.Cookie{
+		Name:    "gophermart-auth",
+		Value:   tokenString,
+		Expires: time.Now().Add(30 * 24 * time.Hour),
+	}
+
+	http.SetCookie(w, &authCookie)
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s ServerHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
-	userID := "5c18f4b8-bbb8-11ef-bd1a-8bd0750e0c51"
+	userID := r.Context().Value("userID").(string)
 
 	var buf bytes.Buffer
 
@@ -71,7 +122,7 @@ func (s ServerHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
-	userID := "5c18f4b8-bbb8-11ef-bd1a-8bd0750e0c51"
+	userID := r.Context().Value("userID").(string)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -114,6 +165,74 @@ func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 			"something went wrong when uploading order",
 			zap.Error(err),
 		)
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s ServerHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(string)
+
+	balance, err := s.l.GetBalance(r.Context(), userID)
+	if err != nil {
+		logger.Log.Error(
+			"error when getting balance",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	var buf bytes.Buffer
+
+	if err := json.NewEncoder(&buf).Encode(balance); err != nil {
+		logger.Log.Error(
+			"error when marshalling balance",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf.Bytes())
+}
+
+func (s ServerHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(string)
+	created := time.Now()
+
+	withdrawRequest := &loyalty.WithdrawRequest{}
+
+	if err := json.NewDecoder(r.Body).Decode(&withdrawRequest); err != nil {
+		logger.Log.Error(
+			"error on unmarshalling withdrawRequest body",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	withdrawRequest.UserID = userID
+	withdrawRequest.Created = created
+
+	if err := s.l.Withdraw(r.Context(), withdrawRequest); err != nil {
+		if errors.Is(err, loyalty.ErrWithdrawNotEnoughPoints) {
+			w.WriteHeader(http.StatusPaymentRequired)
+		}
+		if errors.Is(err, accrual.ErrOrderNotProcessed) || errors.Is(err, accrual.ErrOrderNotFound) {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		logger.Log.Error(
+			"error when making withdraw",
+			zap.String("userID", userID),
+			zap.Int64("orderID", withdrawRequest.OrderID),
+			zap.Error(err),
+		)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)

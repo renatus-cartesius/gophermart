@@ -14,6 +14,7 @@ import (
 
 	"github.com/renatus-cartesius/gophermart/cmd/gophermart/config"
 	"github.com/renatus-cartesius/gophermart/internal/accrual"
+	"github.com/renatus-cartesius/gophermart/internal/auth"
 	"github.com/renatus-cartesius/gophermart/internal/loyalty"
 	"github.com/renatus-cartesius/gophermart/internal/server/handlers"
 	"github.com/renatus-cartesius/gophermart/pkg/logger"
@@ -100,10 +101,16 @@ func main() {
 
 	loyaltyStorage := loyalty.NewLoyaltyStoragePg(db)
 
-	srv := handlers.NewServerHandler(loyalty.NewLoyalty(
-		mockAccrualler,
-		loyaltyStorage,
-	))
+	srv := handlers.NewServerHandler(
+		loyalty.NewLoyalty(
+			mockAccrualler,
+			loyaltyStorage,
+		),
+		auth.NewAuth(
+			[]byte("d6b32087c4b1f7c8b88c945234d54cfa5aa73d4b14e5e7a778448d515db00028b20db"),
+			db,
+		),
+	)
 
 	r := chi.NewRouter()
 	server := &http.Server{Addr: cfg.SrvAddress, Handler: r}
