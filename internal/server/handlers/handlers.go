@@ -176,6 +176,7 @@ func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 			logger.Log.Error(
 				"client passed invalid order number",
 				zap.Error(err),
+				zap.String("userID", userID),
 			)
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
@@ -184,8 +185,17 @@ func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 			logger.Log.Error(
 				"client passed order already uploaded by another user",
 				zap.Error(err),
+				zap.String("userID", userID),
 			)
 			w.WriteHeader(http.StatusConflict)
+			return
+		}
+		if errors.Is(err, loyalty.ErrOrderAlreadyUploaded) {
+			logger.Log.Debug(
+				"client passed order already by this user",
+				zap.String("userID", userID),
+			)
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 		logger.Log.Error(
@@ -194,7 +204,7 @@ func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (s ServerHandler) GetBalance(w http.ResponseWriter, r *http.Request) {

@@ -48,22 +48,39 @@ func NewLoyaltyStoragePg(db *sql.DB) LoyaltyStorager {
 
 func (l *LoyaltyStoragePg) AddOrder(ctx context.Context, userID string, orderInfo *accrual.OrderInfo) error {
 
-	// Check if order already in db
-	var count int
-	if err := l.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM orders WHERE id = $1", orderInfo.Order).Scan(&count); err != nil {
+	// Check if order already in db by that user
+	var uID string
+
+	existingOrderRow := l.db.QueryRowContext(ctx, "SELECT userID FROM orders WHERE id = $1", orderInfo.Order)
+
+	err := existingOrderRow.Err()
+
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		logger.Log.Debug(
-			"error on scanning row",
+			"error on executing query",
 			zap.Error(err),
 		)
-		return err
 	}
 
-	if count > 0 {
+	if err := existingOrderRow.Scan(&uID); err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			_, err = l.db.ExecContext(ctx, "INSERT INTO orders (id, userID, status, accrual) VALUES ($1, $2, $3, $4)", orderInfo.Order, userID, orderInfo.Status, orderInfo.Accrual)
+			return err
+		}
+
+		logger.Log.Debug(
+			"error on scanning into string",
+			zap.Error(err),
+		)
+	}
+
+	if uID != userID {
+		return ErrOrderUploadedAnotherUser
+	} else {
 		return ErrOrderAlreadyUploaded
 	}
 
-	_, err := l.db.ExecContext(ctx, "INSERT INTO orders (id, userID, status, accrual) VALUES ($1, $2, $3, $4)", orderInfo.Order, userID, orderInfo.Status, orderInfo.Accrual)
-	return err
 }
 
 func (l *LoyaltyStoragePg) GetOrders(ctx context.Context, userID string) ([]*Order, error) {
@@ -141,6 +158,8 @@ func (l *Loyalty) UploadOrder(ctx context.Context, userID string, orderID int64)
 	if !luhn.Valid(orderID) {
 		return ErrOrderInvalid
 	}
+
+	// Checking if order is already uploaded
 
 	// Need to check what error is (204, 429, 500)
 	orderInfo, err := l.accrual.GetOrder(ctx, orderID)
