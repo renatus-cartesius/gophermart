@@ -9,7 +9,7 @@ var (
 	ErrWithdrawNotEnoughPoints = errors.New("not enough points for withdraw")
 )
 
-type WithdrawRequest struct {
+type Withdraw struct {
 	OrderID int64     `json:"order"`
 	UserID  string    `json:"-"`
 	Sum     float64   `json:"sum"`

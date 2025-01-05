@@ -21,7 +21,7 @@ func (ma MockAccrualler) GetOrder(ctx context.Context, orderID int64) (*accrual.
 
 type MockLoyaltyStorager struct {
 	Records     map[int64]*Order
-	Withdrawals map[int64]*WithdrawRequest
+	Withdrawals map[int64]*Withdraw
 }
 
 func (mls MockLoyaltyStorager) AddOrder(ctx context.Context, userID string, order *accrual.OrderInfo) error {
@@ -63,7 +63,7 @@ func (mls MockLoyaltyStorager) GetOrders(ctx context.Context, userID string) ([]
 	return res, nil
 }
 
-func (mls MockLoyaltyStorager) AddWithdraw(ctx context.Context, wr *WithdrawRequest) error {
+func (mls MockLoyaltyStorager) AddWithdraw(ctx context.Context, wr *Withdraw) error {
 	mls.Withdrawals[wr.OrderID] = wr
 	return nil
 }

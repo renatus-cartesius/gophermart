@@ -5,16 +5,12 @@ CREATE TABLE withdrawals (
     orderID bigint,
     userID text,
     sum float,
-    created timestamp
+    created timestamp default (timezone('utc', now()))
 );
 
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
-
-DROP TABLE IF EXISTS withdrawals CASCADE;
-
-SELECT 'down SQL query';
-
+DROP TABLE IF EXISTS withdrawals;
 -- +goose StatementEnd

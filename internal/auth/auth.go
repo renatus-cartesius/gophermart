@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/renatus-cartesius/gophermart/pkg/logger"
@@ -24,8 +24,8 @@ type AuthRequest struct {
 }
 
 type Auther interface {
-	RegistrateUser(ctx context.Context, ar *AuthRequest) (string, error)
-	LoginUser(ctx context.Context, ar *AuthRequest) (string, error)
+	RegisterUser(ctx context.Context, ar *AuthRequest) (*http.Cookie, error)
+	LoginUser(ctx context.Context, ar *AuthRequest) (*http.Cookie, error)
 	AuthMiddleWare(h http.HandlerFunc) http.HandlerFunc
 }
 
@@ -42,7 +42,7 @@ func NewAuth(key []byte, db *sql.DB) *Auth {
 	}
 }
 
-func (a *Auth) RegistrateUser(ctx context.Context, ar *AuthRequest) (string, error) {
+func (a *Auth) RegisterUser(ctx context.Context, ar *AuthRequest) (*http.Cookie, error) {
 	// Check if user not exists
 	row := a.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT * FROM users WHERE id = $1)", ar.Login)
 
@@ -52,7 +52,7 @@ func (a *Auth) RegistrateUser(ctx context.Context, ar *AuthRequest) (string, err
 			"error on scanning row into bool",
 			zap.Error(err),
 		)
-		return "", err
+		return nil, err
 	}
 
 	if err := row.Err(); err != nil {
@@ -60,7 +60,7 @@ func (a *Auth) RegistrateUser(ctx context.Context, ar *AuthRequest) (string, err
 			"error on scanning row into bool",
 			zap.Error(err),
 		)
-		return "", err
+		return nil, err
 	}
 
 	if userExists {
@@ -68,25 +68,25 @@ func (a *Auth) RegistrateUser(ctx context.Context, ar *AuthRequest) (string, err
 			"trying to registrate already registered user",
 			zap.String("userID", ar.Login),
 		)
-		return "", ErrUserAlreadyExists
+		return nil, ErrUserAlreadyExists
 	}
 
 	// Calculate pass hash
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(ar.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Add user to db
 	_, err = a.db.ExecContext(ctx, "INSERT INTO users (id, passwordHash) VALUES ($1, $2)", ar.Login, passwordHash)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	return a.GenerateToken(ctx, ar)
 }
 
-func (a *Auth) LoginUser(ctx context.Context, ar *AuthRequest) (string, error) {
+func (a *Auth) LoginUser(ctx context.Context, ar *AuthRequest) (*http.Cookie, error) {
 
 	// Check if user not exists
 	userRow := a.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT * FROM users WHERE id = $1)", ar.Login)
@@ -97,44 +97,56 @@ func (a *Auth) LoginUser(ctx context.Context, ar *AuthRequest) (string, error) {
 			"error on scanning row into bool",
 			zap.Error(err),
 		)
-		return "", err
+		return nil, err
 	}
 
 	if err := userRow.Err(); err != nil {
-		return "", err
-	}
-
-	// Calculate pass hash
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(ar.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Get passwordHash from db
 	var realpasswordHash string
-	hashRow := a.db.QueryRowContext(ctx, "SELECT passwodHash from users where id = $1", ar.Login)
+	hashRow := a.db.QueryRowContext(ctx, "SELECT passwordHash from users where id = $1", ar.Login)
 	if err := hashRow.Scan(&realpasswordHash); err != nil {
 		logger.Log.Debug(
 			"error on scanning row into string",
 			zap.Error(err),
 		)
-		return "", err
+		return nil, err
 	}
 
-	if !userExists || strings.Compare(string(passwordHash), realpasswordHash) == 0 {
-		return "", ErrIncorrectUserCredentials
+	// if !userExists || strings.Compare(string(passwordHash), realpasswordHash) == 0 {
+	if err := bcrypt.CompareHashAndPassword([]byte(realpasswordHash), []byte(ar.Password)); err != nil {
+		logger.Log.Debug(
+			"incorrect password",
+			zap.Error(err),
+		)
+		return nil, ErrIncorrectUserCredentials
 	}
 
 	return a.GenerateToken(ctx, ar)
 }
 
-func (a *Auth) GenerateToken(ctx context.Context, ar *AuthRequest) (string, error) {
-	// Return auth token
+func (a *Auth) GenerateToken(ctx context.Context, ar *AuthRequest) (*http.Cookie, error) {
+	expires := time.Now().Add(30 * 24 * time.Hour)
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userID": ar.Login,
+		"userID":  ar.Login,
+		"expires": expires,
 	})
 
-	return token.SignedString(a.key)
+	tokenString, err := token.SignedString(a.key)
+	if err != nil {
+		return nil, err
+	}
+
+	authCookie := &http.Cookie{
+		Name:    "gophermart-auth",
+		Value:   tokenString,
+		Expires: expires,
+	}
+
+	return authCookie, nil
 }
 
 func (a *Auth) AuthMiddleWare(h http.HandlerFunc) http.HandlerFunc {
@@ -166,6 +178,25 @@ func (a *Auth) AuthMiddleWare(h http.HandlerFunc) http.HandlerFunc {
 		if !ok || !token.Valid {
 			logger.Log.Debug(
 				"unauthorized request",
+			)
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
+		expire, err := time.Parse(time.RFC3339Nano, claims["expires"].(string))
+		if err != nil {
+			logger.Log.Debug(
+				"error when parsing expire in token",
+				zap.Error(err),
+			)
+		}
+
+		now := time.Now()
+		if now.After(expire) {
+			logger.Log.Debug(
+				"passed outdated token",
+				zap.Time("expire", expire),
+				zap.Time("now", now),
 			)
 			w.WriteHeader(http.StatusForbidden)
 			return

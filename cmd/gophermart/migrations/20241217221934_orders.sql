@@ -7,16 +7,12 @@ CREATE TABLE orders (
     userID text,
     status orderStatus,
     accrual float,
-    uploaded timestamp
+    uploaded timestamp default (timezone('utc', now()))
 );
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
-
-DROP TYPE IF EXISTS orderStatus CASCADE;
-
-DROP TABLE IF EXISTS orders CASCADE;
-
-SELECT 'down SQL query';
+DROP TYPE IF EXISTS orderStatus;
+DROP TABLE IF EXISTS orders;
 -- +goose StatementEnd

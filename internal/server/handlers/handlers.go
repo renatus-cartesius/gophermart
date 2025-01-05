@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/renatus-cartesius/gophermart/internal/accrual"
@@ -29,7 +28,7 @@ func Setup(r *chi.Mux, srv *ServerHandler) {
 				r.Post("/withdraw", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.Withdraw))))
 			})
 			r.Post("/register", middlewares.Gzipper(logger.RequestLogger(srv.RegisterUser)))
-			// r.Post("/login", middlewares.Gzipper(logger.RequestLogger(srv.)))
+			r.Post("/login", middlewares.Gzipper(logger.RequestLogger(srv.LoginUser)))
 		})
 		// 	r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
 		// 	r.Post("/updates/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdatesJSON))))
@@ -63,7 +62,7 @@ func (s ServerHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenString, err := s.a.RegistrateUser(r.Context(), ar)
+	authCookie, err := s.a.RegisterUser(r.Context(), ar)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserAlreadyExists) {
 			logger.Log.Error(
@@ -82,13 +81,41 @@ func (s ServerHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	authCookie := http.Cookie{
-		Name:    "gophermart-auth",
-		Value:   tokenString,
-		Expires: time.Now().Add(30 * 24 * time.Hour),
+	http.SetCookie(w, authCookie)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s ServerHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
+	ar := &auth.AuthRequest{}
+	if err := json.NewDecoder(r.Body).Decode(&ar); err != nil {
+		logger.Log.Error(
+			"error on unmarshalling auth request body",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
-	http.SetCookie(w, &authCookie)
+	authCookie, err := s.a.LoginUser(r.Context(), ar)
+	if err != nil {
+		if errors.Is(err, auth.ErrIncorrectUserCredentials) {
+			logger.Log.Error(
+				"trying to login user with invalid credentials",
+				zap.Error(err),
+			)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		} else {
+			logger.Log.Error(
+				"error when login user",
+				zap.Error(err),
+			)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	http.SetCookie(w, authCookie)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -201,9 +228,8 @@ func (s ServerHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 
 func (s ServerHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("userID").(string)
-	created := time.Now()
 
-	withdrawRequest := &loyalty.WithdrawRequest{}
+	withdrawRequest := &loyalty.Withdraw{}
 
 	if err := json.NewDecoder(r.Body).Decode(&withdrawRequest); err != nil {
 		logger.Log.Error(
@@ -215,7 +241,6 @@ func (s ServerHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	withdrawRequest.UserID = userID
-	withdrawRequest.Created = created
 
 	if err := s.l.Withdraw(r.Context(), withdrawRequest); err != nil {
 		if errors.Is(err, loyalty.ErrWithdrawNotEnoughPoints) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/renatus-cartesius/gophermart/internal/accrual"
 	"github.com/renatus-cartesius/gophermart/pkg/logger"
@@ -33,7 +32,7 @@ type LoyaltyStorager interface {
 	GetOrders(ctx context.Context, userID string) ([]*Order, error)
 	GetOrder(ctx context.Context, orderID int64) (*Order, error)
 	GetBalance(ctx context.Context, userID string) (*Balance, error)
-	AddWithdraw(ctx context.Context, wr *WithdrawRequest) error
+	AddWithdraw(ctx context.Context, wr *Withdraw) error
 }
 
 type LoyaltyStoragePg struct {
@@ -63,7 +62,7 @@ func (l *LoyaltyStoragePg) AddOrder(ctx context.Context, userID string, orderInf
 		return ErrOrderAlreadyUploaded
 	}
 
-	_, err := l.db.ExecContext(ctx, "INSERT INTO orders (id, userID, status, accrual, uploaded) VALUES ($1, $2, $3, $4, $5)", orderInfo.Order, userID, orderInfo.Status, orderInfo.Accrual, time.Now())
+	_, err := l.db.ExecContext(ctx, "INSERT INTO orders (id, userID, status, accrual) VALUES ($1, $2, $3, $4)", orderInfo.Order, userID, orderInfo.Status, orderInfo.Accrual)
 	return err
 }
 
@@ -102,9 +101,9 @@ func (l *LoyaltyStoragePg) GetOrder(ctx context.Context, orderID int64) (*Order,
 func (l *LoyaltyStoragePg) GetBalance(ctx context.Context, userID string) (*Balance, error) {
 	row := l.db.QueryRowContext(ctx, `
 		select 
-			((select SUM(accrual) from orders where userID = $1) -
-			(select SUM(sum) from withdrawals where userID = $1)) as balance,
-			(select SUM(sum) from withdrawals where userID = $1) as withdrawn;
+			((select COALESCE(SUM(accrual), 0) from orders where userID = $1) -
+			(select COALESCE(SUM(sum), 0) from withdrawals where userID = $1)) as balance,
+			(select COALESCE(SUM(sum), 0) from withdrawals where userID = $1) as withdrawn;
 		;
 	`, userID)
 
@@ -120,8 +119,8 @@ func (l *LoyaltyStoragePg) GetBalance(ctx context.Context, userID string) (*Bala
 	return balance, row.Err()
 }
 
-func (l *LoyaltyStoragePg) AddWithdraw(ctx context.Context, wr *WithdrawRequest) error {
-	_, err := l.db.ExecContext(ctx, "INSERT INTO withdrawals (orderID, userID, sum, created) VALUES ($1, $2, $3, $4)", wr.OrderID, wr.UserID, wr.Sum, wr.Created)
+func (l *LoyaltyStoragePg) AddWithdraw(ctx context.Context, wr *Withdraw) error {
+	_, err := l.db.ExecContext(ctx, "INSERT INTO withdrawals (orderID, userID, sum) VALUES ($1, $2, $3)", wr.OrderID, wr.UserID, wr.Sum)
 	return err
 }
 
@@ -165,11 +164,11 @@ func (l *Loyalty) GetBalance(ctx context.Context, userID string) (*Balance, erro
 	return l.storage.GetBalance(ctx, userID)
 }
 
-func (l *Loyalty) AddWithdraw(ctx context.Context, wr *WithdrawRequest) error {
-	return l.storage.AddWithdraw(ctx, wr)
-}
+// func (l *Loyalty) AddWithdraw(ctx context.Context, wr *WithdrawRequest) error {
+// 	return l.storage.AddWithdraw(ctx, wr)
+// }
 
-func (l *Loyalty) Withdraw(ctx context.Context, wr *WithdrawRequest) error {
+func (l *Loyalty) Withdraw(ctx context.Context, wr *Withdraw) error {
 	// Check if order processed
 	orderInfo, err := l.accrual.GetOrder(ctx, wr.OrderID)
 	if err != nil {

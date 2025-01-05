@@ -8,8 +8,5 @@ CREATE TABLE users (
 
 -- +goose Down
 -- +goose StatementBegin
-
-DROP TABLE IF EXISTS users CASCADE;
-
-SELECT 'down SQL query';
+DROP TABLE IF EXISTS users;
 -- +goose StatementEnd
