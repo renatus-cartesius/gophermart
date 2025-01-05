@@ -32,31 +32,6 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	mockAccrualler := loyalty.MockAccrualler{
-		Orders: map[int64]*accrual.OrderInfo{
-			79927398713: {
-				Order:   79927398713,
-				Accrual: 331.3,
-				Status:  accrual.TypeStatusProcessing,
-			},
-			3938230889: {
-				Order:   3938230889,
-				Accrual: 0,
-				Status:  accrual.TypeStatusInvalid,
-			},
-			4929972884676289: {
-				Order:   4929972884676289,
-				Accrual: 999999,
-				Status:  accrual.TypeStatusProcessed,
-			},
-			2050898812: {
-				Order:   2050898812,
-				Accrual: 43,
-				Status:  accrual.TypeStatusRegistered,
-			},
-		},
-	}
-
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		logger.Log.Fatal(
@@ -64,6 +39,8 @@ func main() {
 			zap.Error(err),
 		)
 	}
+
+	a := accrual.NewAccrual(cfg.AccrualAddres)
 
 	db, err := sql.Open("pgx", cfg.DBURI)
 	if err != nil {
@@ -94,7 +71,7 @@ func main() {
 
 	srv := handlers.NewServerHandler(
 		loyalty.NewLoyalty(
-			mockAccrualler,
+			a,
 			loyaltyStorage,
 		),
 		auth.NewAuth(

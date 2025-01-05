@@ -2,7 +2,14 @@ package accrual
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/go-resty/resty/v2"
+	"github.com/renatus-cartesius/gophermart/pkg/logger"
+	"go.uber.org/zap"
 )
 
 const (
@@ -28,5 +35,45 @@ type Accrualler interface {
 }
 
 type Accrual struct {
-	accrualUrl string
+	accrualURL string
+	httpClient *resty.Client
+}
+
+func NewAccrual(aurl string) *Accrual {
+	httpClient := resty.New()
+	httpClient.
+		SetRetryCount(3).
+		AddRetryCondition(func(r *resty.Response, err error) bool {
+			return r.StatusCode() == http.StatusTooManyRequests
+		})
+
+	return &Accrual{
+		accrualURL: aurl,
+		httpClient: httpClient,
+	}
+}
+
+func (a *Accrual) GetOrder(ctx context.Context, orderID int64) (*OrderInfo, error) {
+	payload := []byte(fmt.Sprintf("%v", orderID))
+	req := a.httpClient.R().SetBody(payload)
+
+	orderInfoRaw, err := req.Get(a.accrualURL)
+	if err != nil {
+		logger.Log.Debug(
+			"error on making request to accrual",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	orderInfo := &OrderInfo{}
+
+	if err := json.NewDecoder(orderInfoRaw.RawBody()).Decode(&orderInfo); err != nil {
+		logger.Log.Debug(
+			"error on reading result from accrual",
+			zap.Error(err),
+		)
+	}
+
+	return orderInfo, nil
 }
