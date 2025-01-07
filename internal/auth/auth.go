@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"time"
@@ -29,37 +28,29 @@ type Auther interface {
 	AuthMiddleWare(h http.HandlerFunc) http.HandlerFunc
 }
 
-type Auth struct {
-	key []byte
-	db  *sql.DB
+type AuthStorager interface {
+	IsUserExists(ctx context.Context, userID string) (bool, error)
+	AddUser(ctx context.Context, userID, passwordHash string) error
+	GetHash(ctx context.Context, userID string) (string, error)
 }
 
-func NewAuth(key []byte, db *sql.DB) *Auth {
+type Auth struct {
+	key     []byte
+	storage AuthStorager
+}
+
+func NewAuth(key []byte, storage AuthStorager) *Auth {
 
 	return &Auth{
-		key: key,
-		db:  db,
+		key:     key,
+		storage: storage,
 	}
 }
 
 func (a *Auth) RegisterUser(ctx context.Context, ar *AuthRequest) (*http.Cookie, error) {
 	// Check if user not exists
-	row := a.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT * FROM users WHERE id = $1)", ar.Login)
-
-	var userExists bool
-	if err := row.Scan(&userExists); err != nil {
-		logger.Log.Debug(
-			"error on scanning row into bool",
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	if err := row.Err(); err != nil {
-		logger.Log.Debug(
-			"error on scanning row into bool",
-			zap.Error(err),
-		)
+	userExists, err := a.storage.IsUserExists(ctx, ar.Login)
+	if err != nil {
 		return nil, err
 	}
 
@@ -78,8 +69,7 @@ func (a *Auth) RegisterUser(ctx context.Context, ar *AuthRequest) (*http.Cookie,
 	}
 
 	// Add user to db
-	_, err = a.db.ExecContext(ctx, "INSERT INTO users (id, passwordHash) VALUES ($1, $2)", ar.Login, passwordHash)
-	if err != nil {
+	if err := a.storage.AddUser(ctx, ar.Login, string(passwordHash)); err != nil {
 		return nil, err
 	}
 
@@ -89,34 +79,19 @@ func (a *Auth) RegisterUser(ctx context.Context, ar *AuthRequest) (*http.Cookie,
 func (a *Auth) LoginUser(ctx context.Context, ar *AuthRequest) (*http.Cookie, error) {
 
 	// Check if user not exists
-	userRow := a.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT * FROM users WHERE id = $1)", ar.Login)
-
-	var userExists bool
-	if err := userRow.Scan(&userExists); err != nil {
-		logger.Log.Debug(
-			"error on scanning row into bool",
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	if err := userRow.Err(); err != nil {
+	userExists, err := a.storage.IsUserExists(ctx, ar.Login)
+	if err != nil {
 		return nil, err
 	}
 
 	// Get passwordHash from db
-	var realpasswordHash string
-	hashRow := a.db.QueryRowContext(ctx, "SELECT passwordHash from users where id = $1", ar.Login)
-	if err := hashRow.Scan(&realpasswordHash); err != nil {
-		logger.Log.Debug(
-			"error on scanning row into string",
-			zap.Error(err),
-		)
+	realpasswordHash, err := a.storage.GetHash(ctx, ar.Login)
+	if err != nil {
 		return nil, err
 	}
 
 	// if !userExists || strings.Compare(string(passwordHash), realpasswordHash) == 0 {
-	if err := bcrypt.CompareHashAndPassword([]byte(realpasswordHash), []byte(ar.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(realpasswordHash), []byte(ar.Password)); err != nil || !userExists {
 		logger.Log.Debug(
 			"incorrect password",
 			zap.Error(err),
@@ -158,7 +133,7 @@ func (a *Auth) AuthMiddleWare(h http.HandlerFunc) http.HandlerFunc {
 			logger.Log.Debug(
 				"unauthorized request",
 			)
-			w.WriteHeader(http.StatusForbidden)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
@@ -179,7 +154,7 @@ func (a *Auth) AuthMiddleWare(h http.HandlerFunc) http.HandlerFunc {
 			logger.Log.Debug(
 				"unauthorized request",
 			)
-			w.WriteHeader(http.StatusForbidden)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
@@ -198,7 +173,7 @@ func (a *Auth) AuthMiddleWare(h http.HandlerFunc) http.HandlerFunc {
 				zap.Time("expire", expire),
 				zap.Time("now", now),
 			)
-			w.WriteHeader(http.StatusForbidden)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 

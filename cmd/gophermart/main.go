@@ -18,6 +18,7 @@ import (
 	"github.com/renatus-cartesius/gophermart/internal/auth"
 	"github.com/renatus-cartesius/gophermart/internal/loyalty"
 	"github.com/renatus-cartesius/gophermart/internal/server/handlers"
+	"github.com/renatus-cartesius/gophermart/internal/storage"
 	"github.com/renatus-cartesius/gophermart/pkg/logger"
 
 	"github.com/go-chi/chi/v5"
@@ -67,16 +68,16 @@ func main() {
 		)
 	}
 
-	loyaltyStorage := loyalty.NewLoyaltyStoragePg(db)
+	pgStorage := storage.NewPGStorage(db)
 
 	srv := handlers.NewServerHandler(
 		loyalty.NewLoyalty(
 			a,
-			loyaltyStorage,
+			pgStorage,
 		),
 		auth.NewAuth(
 			[]byte("d6b32087c4b1f7c8b88c945234d54cfa5aa73d4b14e5e7a778448d515db00028b20db"),
-			db,
+			pgStorage,
 		),
 	)
 

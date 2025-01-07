@@ -68,10 +68,11 @@ func (a *Accrual) GetOrder(ctx context.Context, orderID int64) (*OrderInfo, erro
 
 	orderInfo := &OrderInfo{}
 
-	if err := json.NewDecoder(orderInfoRaw.RawBody()).Decode(&orderInfo); err != nil {
+	if err := json.Unmarshal(orderInfoRaw.Body(), &orderInfo); err != nil {
 		logger.Log.Debug(
 			"error on reading result from accrual",
 			zap.Error(err),
+			zap.String("resp", string(orderInfoRaw.Body())),
 		)
 	}
 
