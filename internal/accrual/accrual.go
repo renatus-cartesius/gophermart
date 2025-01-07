@@ -35,11 +35,11 @@ type Accrualler interface {
 }
 
 type Accrual struct {
-	accrualURL string
-	httpClient *resty.Client
+	accrualAddress string
+	httpClient     *resty.Client
 }
 
-func NewAccrual(aurl string) *Accrual {
+func NewAccrual(aAddress string) *Accrual {
 	httpClient := resty.New()
 	httpClient.
 		SetRetryCount(3).
@@ -48,16 +48,15 @@ func NewAccrual(aurl string) *Accrual {
 		})
 
 	return &Accrual{
-		accrualURL: aurl,
-		httpClient: httpClient,
+		accrualAddress: aAddress,
+		httpClient:     httpClient,
 	}
 }
 
 func (a *Accrual) GetOrder(ctx context.Context, orderID int64) (*OrderInfo, error) {
-	payload := []byte(fmt.Sprintf("%v", orderID))
-	req := a.httpClient.R().SetBody(payload)
+	req := a.httpClient.R()
 
-	orderInfoRaw, err := req.Get(a.accrualURL)
+	orderInfoRaw, err := req.Get(a.accrualAddress + fmt.Sprintf("/api/orders/%d", orderID))
 	if err != nil {
 		logger.Log.Debug(
 			"error on making request to accrual",
