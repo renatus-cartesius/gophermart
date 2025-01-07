@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/renatus-cartesius/gophermart/internal/accrual"
 	"github.com/renatus-cartesius/gophermart/internal/auth"
 	"github.com/renatus-cartesius/gophermart/internal/loyalty"
 	"github.com/renatus-cartesius/gophermart/internal/server/middlewares"
@@ -245,7 +244,7 @@ func (s ServerHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, loyalty.ErrWithdrawNotEnoughPoints) {
 			w.WriteHeader(http.StatusPaymentRequired)
 		}
-		if errors.Is(err, accrual.ErrOrderNotProcessed) || errors.Is(err, accrual.ErrOrderNotFound) {
+		if errors.Is(err, loyalty.ErrOrderInvalid) {
 			w.WriteHeader(http.StatusUnprocessableEntity)
 		} else {
 			w.WriteHeader(http.StatusInternalServerError)

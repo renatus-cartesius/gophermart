@@ -86,13 +86,24 @@ func (l *Loyalty) GetBalance(ctx context.Context, userID string) (*Balance, erro
 
 func (l *Loyalty) Withdraw(ctx context.Context, wr *Withdraw) error {
 	// Check if order processed
-	orderInfo, err := l.accrual.GetOrder(ctx, wr.OrderID)
+	// orderInfo, err := l.accrual.GetOrder(ctx, wr.OrderID)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// if orderInfo.Status != accrual.TypeStatusProcessed {
+	// 	return accrual.ErrOrderNotProcessed
+	// }
+
+	// Check if orderID is Luhn-valid
+
+	number, err := strconv.ParseInt(wr.OrderID, 10, 64)
 	if err != nil {
 		return err
 	}
 
-	if orderInfo.Status != accrual.TypeStatusProcessed {
-		return accrual.ErrOrderNotProcessed
+	if !luhn.Valid(number) {
+		return ErrOrderInvalid
 	}
 
 	// Check if user has enough points for withdraw
