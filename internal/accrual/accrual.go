@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/go-resty/resty/v2"
@@ -25,13 +24,13 @@ var (
 )
 
 type OrderInfo struct {
-	Order   int64   `json:"order"`
+	Order   string  `json:"order"`
 	Status  string  `json:"status"`
 	Accrual float64 `json:"accrual"`
 }
 
 type Accrualler interface {
-	GetOrder(context.Context, int64) (*OrderInfo, error)
+	GetOrder(context.Context, string) (*OrderInfo, error)
 }
 
 type Accrual struct {
@@ -53,10 +52,10 @@ func NewAccrual(aAddress string) *Accrual {
 	}
 }
 
-func (a *Accrual) GetOrder(ctx context.Context, orderID int64) (*OrderInfo, error) {
+func (a *Accrual) GetOrder(ctx context.Context, orderID string) (*OrderInfo, error) {
 	req := a.httpClient.R()
 
-	orderInfoRaw, err := req.Get(a.accrualAddress + fmt.Sprintf("/api/orders/%d", orderID))
+	orderInfoRaw, err := req.Get(a.accrualAddress + "/api/orders/" + orderID)
 	if err != nil {
 		logger.Log.Debug(
 			"error on making request to accrual",
@@ -67,13 +66,28 @@ func (a *Accrual) GetOrder(ctx context.Context, orderID int64) (*OrderInfo, erro
 
 	orderInfo := &OrderInfo{}
 
+	if orderInfoRaw.StatusCode() == 204 {
+		logger.Log.Debug(
+			"order wan not found in accrual",
+			zap.String("orderID", orderID),
+		)
+		return nil, ErrOrderNotFound
+	}
+
 	if err := json.Unmarshal(orderInfoRaw.Body(), &orderInfo); err != nil {
 		logger.Log.Debug(
 			"error on reading result from accrual",
 			zap.Error(err),
 			zap.String("resp", string(orderInfoRaw.Body())),
+			zap.String("code", orderInfoRaw.Status()),
 		)
 	}
 
+	logger.Log.Debug(
+		"order was found in accrual",
+		zap.String("orderID", orderInfo.Order),
+		zap.String("staus", orderInfo.Status),
+		zap.Float64("accrual", orderInfo.Accrual),
+	)
 	return orderInfo, nil
 }

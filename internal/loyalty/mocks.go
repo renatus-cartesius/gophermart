@@ -8,10 +8,10 @@ import (
 )
 
 type MockAccrualler struct {
-	Orders map[int64]*accrual.OrderInfo
+	Orders map[string]*accrual.OrderInfo
 }
 
-func (ma MockAccrualler) GetOrder(ctx context.Context, orderID int64) (*accrual.OrderInfo, error) {
+func (ma MockAccrualler) GetOrder(ctx context.Context, orderID string) (*accrual.OrderInfo, error) {
 	order, ok := ma.Orders[orderID]
 	if !ok {
 		return nil, accrual.ErrOrderNotFound
@@ -20,8 +20,8 @@ func (ma MockAccrualler) GetOrder(ctx context.Context, orderID int64) (*accrual.
 }
 
 type MockLoyaltyStorager struct {
-	Records     map[int64]*Order
-	Withdrawals map[int64]*Withdraw
+	Records     map[string]*Order
+	Withdrawals map[string]*Withdraw
 }
 
 func (mls MockLoyaltyStorager) AddOrder(ctx context.Context, userID string, order *accrual.OrderInfo) error {
@@ -43,7 +43,7 @@ func (mls MockLoyaltyStorager) AddOrder(ctx context.Context, userID string, orde
 	return nil
 }
 
-func (mls MockLoyaltyStorager) GetOrder(ctx context.Context, orderID int64) (*Order, error) {
+func (mls MockLoyaltyStorager) GetOrder(ctx context.Context, orderID string) (*Order, error) {
 	orderRecord, ok := mls.Records[orderID]
 	if !ok {
 		return nil, ErrOrderNotFound

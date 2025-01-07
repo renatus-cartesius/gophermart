@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/renatus-cartesius/gophermart/internal/accrual"
@@ -161,17 +160,7 @@ func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := strconv.ParseInt(string(body), 10, 64)
-	if err != nil {
-		logger.Log.Error(
-			"error on parsing order number",
-			zap.Error(err),
-		)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if err = s.l.UploadOrder(r.Context(), userID, order); err != nil {
+	if err = s.l.UploadOrder(r.Context(), userID, string(body)); err != nil {
 		if errors.Is(err, loyalty.ErrOrderInvalid) {
 			logger.Log.Error(
 				"client passed invalid order number",
@@ -264,7 +253,7 @@ func (s ServerHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		logger.Log.Error(
 			"error when making withdraw",
 			zap.String("userID", userID),
-			zap.Int64("orderID", withdrawRequest.OrderID),
+			zap.String("orderID", withdrawRequest.OrderID),
 			zap.Error(err),
 		)
 		return

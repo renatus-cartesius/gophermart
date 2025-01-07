@@ -3,6 +3,7 @@ package loyalty
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/renatus-cartesius/gophermart/internal/accrual"
 	"github.com/renatus-cartesius/gophermart/pkg/luhn"
@@ -27,7 +28,7 @@ type Balance struct {
 type LoyaltyStorager interface {
 	AddOrder(ctx context.Context, userID string, orderInfo *accrual.OrderInfo) error
 	GetOrders(ctx context.Context, userID string) ([]*Order, error)
-	GetOrder(ctx context.Context, orderID int64) (*Order, error)
+	GetOrder(ctx context.Context, orderID string) (*Order, error)
 	GetBalance(ctx context.Context, userID string) (*Balance, error)
 	AddWithdraw(ctx context.Context, wr *Withdraw) error
 }
@@ -44,9 +45,14 @@ func NewLoyalty(accrual accrual.Accrualler, storage LoyaltyStorager) *Loyalty {
 	}
 }
 
-func (l *Loyalty) UploadOrder(ctx context.Context, userID string, orderID int64) error {
+func (l *Loyalty) UploadOrder(ctx context.Context, userID string, orderID string) error {
 	// Validating order num with Luhn algorithm (409)
-	if !luhn.Valid(orderID) {
+	number, err := strconv.ParseInt(orderID, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	if !luhn.Valid(number) {
 		return ErrOrderInvalid
 	}
 
@@ -66,7 +72,7 @@ func (l *Loyalty) GetOrders(ctx context.Context, userID string) ([]*Order, error
 	return l.storage.GetOrders(ctx, userID)
 }
 
-func (l *Loyalty) GetOrder(ctx context.Context, orderID int64) (*Order, error) {
+func (l *Loyalty) GetOrder(ctx context.Context, orderID string) (*Order, error) {
 	return l.storage.GetOrder(ctx, orderID)
 }
 

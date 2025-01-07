@@ -2,7 +2,7 @@
 -- +goose StatementBegin
 
 CREATE TABLE withdrawals (
-    orderID bigint,
+    orderID text,
     userID text,
     sum float,
     created timestamp default (timezone('utc', now()))

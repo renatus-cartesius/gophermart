@@ -3,7 +3,7 @@
 CREATE TYPE orderStatus as ENUM ('REGISTERED', 'INVALID', 'PROCESSING', 'PROCESSED');
 
 CREATE TABLE orders (
-    id bigint PRIMARY KEY,
+    id text PRIMARY KEY,
     userID text,
     status orderStatus,
     accrual float,

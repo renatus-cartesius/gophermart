@@ -76,7 +76,7 @@ func (l *PGStorage) GetOrders(ctx context.Context, userID string) ([]*loyalty.Or
 	return orders, nil
 }
 
-func (l *PGStorage) GetOrder(ctx context.Context, orderID int64) (*loyalty.Order, error) {
+func (l *PGStorage) GetOrder(ctx context.Context, orderID string) (*loyalty.Order, error) {
 	return nil, nil
 }
 
