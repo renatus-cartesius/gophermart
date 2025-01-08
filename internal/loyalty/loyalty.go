@@ -6,7 +6,9 @@ import (
 	"strconv"
 
 	"github.com/renatus-cartesius/gophermart/internal/accrual"
+	"github.com/renatus-cartesius/gophermart/pkg/logger"
 	"github.com/renatus-cartesius/gophermart/pkg/luhn"
+	"go.uber.org/zap"
 )
 
 var (
@@ -63,6 +65,11 @@ func (l *Loyalty) UploadOrder(ctx context.Context, userID string, orderID string
 	if err != nil {
 
 		if errors.Is(err, ErrOrderNotFound) {
+
+			logger.Log.Debug(
+				"order not found in storage, checking in accrual",
+				zap.String("orderID", orderID),
+			)
 
 			// Need to check what error is (204, 429, 500)
 			orderInfo, err := l.accrual.GetOrder(ctx, orderID)

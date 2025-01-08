@@ -13,12 +13,23 @@ import (
 
 func (l *PGStorage) AddOrder(ctx context.Context, userID string, orderInfo *accrual.OrderInfo) error {
 
+	logger.Log.Debug(
+		"begin adding order to storage",
+		zap.String("orderID", orderInfo.Order),
+	)
+
 	// Check if order already in db by that user
 	var uID string
 
 	existingOrderRow := l.db.QueryRowContext(ctx, "SELECT userID FROM orders WHERE id = $1", orderInfo.Order)
 
 	err := existingOrderRow.Err()
+
+	logger.Log.Debug(
+		"checked order in storage",
+		zap.String("orderID", orderInfo.Order),
+		zap.Error(err),
+	)
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		logger.Log.Debug(
@@ -30,6 +41,11 @@ func (l *PGStorage) AddOrder(ctx context.Context, userID string, orderInfo *accr
 	if err := existingOrderRow.Scan(&uID); err != nil {
 
 		if errors.Is(err, sql.ErrNoRows) {
+			logger.Log.Debug(
+				"inserting order to database",
+				zap.String("orderID", orderInfo.Order),
+				zap.Error(err),
+			)
 			_, err = l.db.ExecContext(ctx, "INSERT INTO orders (id, userID, status, accrual) VALUES ($1, $2, $3, $4)", orderInfo.Order, userID, orderInfo.Status, orderInfo.Accrual)
 			return err
 		}
