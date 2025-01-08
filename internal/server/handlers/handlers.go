@@ -20,6 +20,7 @@ func Setup(r *chi.Mux, srv *ServerHandler) {
 	r.Route("/api", func(r chi.Router) {
 		r.Route("/user", func(r chi.Router) {
 			r.Get("/orders", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.GetOrders))))
+			r.Get("/withdrawals", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.GetWithdrawals))))
 			r.Post("/orders", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.UploadOrder))))
 			r.Route("/balance", func(r chi.Router) {
 				r.Get("/", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.GetBalance))))
@@ -135,6 +136,35 @@ func (s ServerHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(&buf).Encode(orders); err != nil {
 		logger.Log.Error(
 			"error on marshalling orders for user",
+			zap.String("userID", userID),
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf.Bytes())
+}
+
+func (s ServerHandler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(string)
+
+	var buf bytes.Buffer
+
+	orders, err := s.l.GetWithdrawals(r.Context(), userID)
+	if err != nil {
+		logger.Log.Error(
+			"error on getting withdrawals from loyalty storage",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(&buf).Encode(orders); err != nil {
+		logger.Log.Error(
+			"error on marshalling withdrawals for user",
 			zap.String("userID", userID),
 			zap.Error(err),
 		)

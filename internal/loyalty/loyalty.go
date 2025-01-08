@@ -28,6 +28,7 @@ type Balance struct {
 type LoyaltyStorager interface {
 	AddOrder(ctx context.Context, userID string, orderInfo *accrual.OrderInfo) error
 	GetOrders(ctx context.Context, userID string) ([]*Order, error)
+	GetWithdrawals(ctx context.Context, userID string) ([]*Withdraw, error)
 	GetOrder(ctx context.Context, orderID string) (*Order, error)
 	GetBalance(ctx context.Context, userID string) (*Balance, error)
 	AddWithdraw(ctx context.Context, wr *Withdraw) error
@@ -70,6 +71,10 @@ func (l *Loyalty) UploadOrder(ctx context.Context, userID string, orderID string
 
 func (l *Loyalty) GetOrders(ctx context.Context, userID string) ([]*Order, error) {
 	return l.storage.GetOrders(ctx, userID)
+}
+
+func (l *Loyalty) GetWithdrawals(ctx context.Context, userID string) ([]*Withdraw, error) {
+	return l.storage.GetWithdrawals(ctx, userID)
 }
 
 func (l *Loyalty) GetOrder(ctx context.Context, orderID string) (*Order, error) {

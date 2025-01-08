@@ -63,6 +63,18 @@ func (mls MockLoyaltyStorager) GetOrders(ctx context.Context, userID string) ([]
 	return res, nil
 }
 
+func (mls MockLoyaltyStorager) GetWithdrawals(ctx context.Context, userID string) ([]*Withdraw, error) {
+	res := make([]*Withdraw, 0)
+
+	for _, withdraw := range mls.Withdrawals {
+		if withdraw.UserID == userID {
+			res = append(res, withdraw)
+		}
+	}
+
+	return res, nil
+}
+
 func (mls MockLoyaltyStorager) AddWithdraw(ctx context.Context, wr *Withdraw) error {
 	mls.Withdrawals[wr.OrderID] = wr
 	return nil

@@ -76,6 +76,34 @@ func (l *PGStorage) GetOrders(ctx context.Context, userID string) ([]*loyalty.Or
 	return orders, nil
 }
 
+func (l *PGStorage) GetWithdrawals(ctx context.Context, userID string) ([]*loyalty.Withdraw, error) {
+
+	withdrawals := make([]*loyalty.Withdraw, 0)
+
+	rows, err := l.db.QueryContext(ctx, "SELECT * FROM withdrawals WHERE userID = $1 ORDER BY created", userID)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		withdraw := &loyalty.Withdraw{}
+		if err := rows.Scan(&withdraw.OrderID, &withdraw.UserID, &withdraw.Sum, &withdraw.Created); err != nil {
+			logger.Log.Debug(
+				"error on scanning row to Order",
+				zap.Error(err),
+			)
+			continue
+		}
+		withdrawals = append(withdrawals, withdraw)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return withdrawals, nil
+}
+
 func (l *PGStorage) GetOrder(ctx context.Context, orderID string) (*loyalty.Order, error) {
 	return nil, nil
 }
