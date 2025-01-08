@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/renatus-cartesius/gophermart/internal/accrual"
 	"github.com/renatus-cartesius/gophermart/internal/auth"
 	"github.com/renatus-cartesius/gophermart/internal/loyalty"
 	"github.com/renatus-cartesius/gophermart/internal/server/middlewares"
@@ -214,6 +215,14 @@ func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 				zap.String("userID", userID),
 			)
 			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if errors.Is(err, accrual.ErrOrderNotFound) {
+			logger.Log.Debug(
+				"client passed order that not registered in accrual",
+				zap.String("userID", userID),
+			)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		logger.Log.Error(

@@ -53,6 +53,12 @@ func NewAccrual(aAddress string) *Accrual {
 }
 
 func (a *Accrual) GetOrder(ctx context.Context, orderID string) (*OrderInfo, error) {
+
+	logger.Log.Debug(
+		"checking order in accrual",
+		zap.String("orderID", orderID),
+	)
+
 	req := a.httpClient.R()
 
 	orderInfoRaw, err := req.Get(a.accrualAddress + "/api/orders/" + orderID)

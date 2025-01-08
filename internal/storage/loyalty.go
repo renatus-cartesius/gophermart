@@ -89,7 +89,7 @@ func (l *PGStorage) GetWithdrawals(ctx context.Context, userID string) ([]*loyal
 		withdraw := &loyalty.Withdraw{}
 		if err := rows.Scan(&withdraw.OrderID, &withdraw.UserID, &withdraw.Sum, &withdraw.Created); err != nil {
 			logger.Log.Debug(
-				"error on scanning row to Order",
+				"error on scanning row to Withdraw",
 				zap.Error(err),
 			)
 			continue
@@ -105,7 +105,23 @@ func (l *PGStorage) GetWithdrawals(ctx context.Context, userID string) ([]*loyal
 }
 
 func (l *PGStorage) GetOrder(ctx context.Context, orderID string) (*loyalty.Order, error) {
-	return nil, nil
+	orderRow := l.db.QueryRowContext(ctx, "SELECT * FROM orders where id = $1", orderID)
+
+	order := &loyalty.Order{}
+
+	if err := orderRow.Scan(&order.ID, &order.UserID, &order.Status, &order.Accrual, &order.Uploaded); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, loyalty.ErrOrderNotFound
+		}
+		logger.Log.Debug(
+			"error on scanning row to Order",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	return order, orderRow.Err()
+
 }
 
 func (l *PGStorage) GetBalance(ctx context.Context, userID string) (*loyalty.Balance, error) {

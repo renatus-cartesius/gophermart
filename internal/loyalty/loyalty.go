@@ -59,14 +59,30 @@ func (l *Loyalty) UploadOrder(ctx context.Context, userID string, orderID string
 
 	// Checking if order is already uploaded
 
-	// Need to check what error is (204, 429, 500)
-	orderInfo, err := l.accrual.GetOrder(ctx, orderID)
+	order, err := l.storage.GetOrder(ctx, orderID)
 	if err != nil {
+
+		if errors.Is(err, ErrOrderNotFound) {
+
+			// Need to check what error is (204, 429, 500)
+			orderInfo, err := l.accrual.GetOrder(ctx, orderID)
+			if err != nil {
+				return err
+			}
+
+			// Checking if order is has already been uploaded to db but that user or another
+			return l.storage.AddOrder(ctx, userID, orderInfo)
+		}
+
 		return err
 	}
 
-	// Checking if order is has already been uploaded to db but that user or another
-	return l.storage.AddOrder(ctx, userID, orderInfo)
+	if order.UserID == userID {
+		return ErrOrderAlreadyUploaded
+	} else {
+		return ErrOrderUploadedAnotherUser
+	}
+
 }
 
 func (l *Loyalty) GetOrders(ctx context.Context, userID string) ([]*Order, error) {
