@@ -119,7 +119,7 @@ func (s ServerHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s ServerHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(string)
+	userID := r.Context().Value(auth.Username("userID")).(string)
 
 	var buf bytes.Buffer
 
@@ -148,7 +148,7 @@ func (s ServerHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s ServerHandler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(string)
+	userID := r.Context().Value(auth.Username("userID")).(string)
 
 	var buf bytes.Buffer
 
@@ -177,7 +177,7 @@ func (s ServerHandler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(string)
+	userID := r.Context().Value(auth.Username("userID")).(string)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -228,7 +228,7 @@ func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s ServerHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(string)
+	userID := r.Context().Value(auth.Username("userID")).(string)
 
 	balance, err := s.l.GetBalance(r.Context(), userID)
 	if err != nil {
@@ -257,7 +257,7 @@ func (s ServerHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s ServerHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(string)
+	userID := r.Context().Value(auth.Username("userID")).(string)
 
 	withdrawRequest := &loyalty.Withdraw{}
 

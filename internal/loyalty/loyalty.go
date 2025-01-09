@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	TypeStatusNew        = "New"
+	TypeStatusNew        = "NEW"
 	TypeStatusInvalid    = "INVALID"
 	TypeStatusProcessing = "PROCESSING"
 	TypeStatusProcessed  = "PROCESSED"

@@ -54,6 +54,12 @@ func (l *Loyalty) UpdateOrderStatus(ctx context.Context, orderID string) error {
 		return err
 	}
 
+	logger.Log.Info(
+		"updaing order",
+		zap.String("orderID", orderID),
+		zap.String("newStatus", orderInfo.Status),
+		zap.Float64("accrual", orderInfo.Accrual),
+	)
 	err = l.storage.UpdateOrder(ctx, orderInfo)
 	return err
 }

@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (l *PGStorage) AddOrder(ctx context.Context, userID string, orderID string) error {
+func (pg *PGStorage) AddOrder(ctx context.Context, userID string, orderID string) error {
 
 	logger.Log.Debug(
 		"begin adding order to storage",
@@ -21,7 +21,7 @@ func (l *PGStorage) AddOrder(ctx context.Context, userID string, orderID string)
 	// Check if order already in db by that user
 	var uID string
 
-	existingOrderRow := l.db.QueryRowContext(ctx, "SELECT userID FROM orders WHERE id = $1", orderID)
+	existingOrderRow := pg.db.QueryRowContext(ctx, "SELECT userID FROM orders WHERE id = $1", orderID)
 
 	err := existingOrderRow.Err()
 
@@ -46,7 +46,7 @@ func (l *PGStorage) AddOrder(ctx context.Context, userID string, orderID string)
 				zap.String("orderID", orderID),
 				zap.Error(err),
 			)
-			_, err = l.db.ExecContext(ctx, "INSERT INTO orders (id, userID, status) VALUES ($1, $2, 'NEW')", orderID, userID)
+			_, err = pg.db.ExecContext(ctx, "INSERT INTO orders (id, userID, status) VALUES ($1, $2, $3)", orderID, userID, loyalty.TypeStatusNew)
 			return err
 		}
 
@@ -64,11 +64,11 @@ func (l *PGStorage) AddOrder(ctx context.Context, userID string, orderID string)
 
 }
 
-func (l *PGStorage) GetOrders(ctx context.Context, userID string) ([]*loyalty.Order, error) {
+func (pg *PGStorage) GetOrders(ctx context.Context, userID string) ([]*loyalty.Order, error) {
 
 	orders := make([]*loyalty.Order, 0)
 
-	rows, err := l.db.QueryContext(ctx, "SELECT * FROM orders WHERE userID = $1 ORDER BY uploaded", userID)
+	rows, err := pg.db.QueryContext(ctx, "SELECT * FROM orders WHERE userID = $1 ORDER BY uploaded", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -92,11 +92,11 @@ func (l *PGStorage) GetOrders(ctx context.Context, userID string) ([]*loyalty.Or
 	return orders, nil
 }
 
-func (l *PGStorage) GetWithdrawals(ctx context.Context, userID string) ([]*loyalty.Withdraw, error) {
+func (pg *PGStorage) GetWithdrawals(ctx context.Context, userID string) ([]*loyalty.Withdraw, error) {
 
 	withdrawals := make([]*loyalty.Withdraw, 0)
 
-	rows, err := l.db.QueryContext(ctx, "SELECT * FROM withdrawals WHERE userID = $1 ORDER BY created", userID)
+	rows, err := pg.db.QueryContext(ctx, "SELECT * FROM withdrawals WHERE userID = $1 ORDER BY created", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -120,8 +120,8 @@ func (l *PGStorage) GetWithdrawals(ctx context.Context, userID string) ([]*loyal
 	return withdrawals, nil
 }
 
-func (l *PGStorage) GetOrder(ctx context.Context, orderID string) (*loyalty.Order, error) {
-	orderRow := l.db.QueryRowContext(ctx, "SELECT * FROM orders where id = $1", orderID)
+func (pg *PGStorage) GetOrder(ctx context.Context, orderID string) (*loyalty.Order, error) {
+	orderRow := pg.db.QueryRowContext(ctx, "SELECT * FROM orders where id = $1", orderID)
 
 	order := &loyalty.Order{}
 
@@ -140,14 +140,14 @@ func (l *PGStorage) GetOrder(ctx context.Context, orderID string) (*loyalty.Orde
 
 }
 
-func (l *PGStorage) GetBalance(ctx context.Context, userID string) (*loyalty.Balance, error) {
-	row := l.db.QueryRowContext(ctx, `
+func (pg *PGStorage) GetBalance(ctx context.Context, userID string) (*loyalty.Balance, error) {
+	row := pg.db.QueryRowContext(ctx, `
 		select 
-			((select COALESCE(SUM(accrual), 0) from orders where userID = $1 and status = 'PROCESSED') -
+			((select COALESCE(SUM(accrual), 0) from orders where userID = $1 and status = $2) -
 			(select COALESCE(SUM(sum), 0) from withdrawals where userID = $1)) as balance,
 			(select COALESCE(SUM(sum), 0) from withdrawals where userID = $1) as withdrawn;
 		;
-	`, userID)
+	`, userID, loyalty.TypeStatusProcessed)
 
 	balance := &loyalty.Balance{}
 	err := row.Scan(&balance.Current, &balance.Withdrawn)
@@ -161,15 +161,15 @@ func (l *PGStorage) GetBalance(ctx context.Context, userID string) (*loyalty.Bal
 	return balance, row.Err()
 }
 
-func (l *PGStorage) AddWithdraw(ctx context.Context, wr *loyalty.Withdraw) error {
-	_, err := l.db.ExecContext(ctx, "INSERT INTO withdrawals (orderID, userID, sum) VALUES ($1, $2, $3)", wr.OrderID, wr.UserID, wr.Sum)
+func (pg *PGStorage) AddWithdraw(ctx context.Context, wr *loyalty.Withdraw) error {
+	_, err := pg.db.ExecContext(ctx, "INSERT INTO withdrawals (orderID, userID, sum) VALUES ($1, $2, $3)", wr.OrderID, wr.UserID, wr.Sum)
 	return err
 }
 
-func (l *PGStorage) GetUnhandledOrders(ctx context.Context) ([]string, error) {
+func (pg *PGStorage) GetUnhandledOrders(ctx context.Context) ([]string, error) {
 	orders := make([]string, 0)
 
-	rows, err := l.db.QueryContext(ctx, "SELECT id from orders where status != 'PROCESSED' and status != 'INVALID'")
+	rows, err := pg.db.QueryContext(ctx, "SELECT id from orders where status != $1 and status != $2", loyalty.TypeStatusProcessed, loyalty.TypeStatusInvalid)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func (l *PGStorage) GetUnhandledOrders(ctx context.Context) ([]string, error) {
 
 	return orders, nil
 }
-func (l *PGStorage) UpdateOrder(ctx context.Context, orderInfo *accrual.OrderInfo) error {
-	_, err := l.db.ExecContext(ctx, "UPDATE orders SET status=$1, accrual=$2 WHERE id=$3", orderInfo.Status, orderInfo.Accrual, orderInfo.Order)
+func (pg *PGStorage) UpdateOrder(ctx context.Context, orderInfo *accrual.OrderInfo) error {
+	_, err := pg.db.ExecContext(ctx, "UPDATE orders SET status=$1, accrual=$2 WHERE id=$3", orderInfo.Status, orderInfo.Accrual, orderInfo.Order)
 	return err
 }

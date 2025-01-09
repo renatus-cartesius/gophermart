@@ -17,6 +17,8 @@ var (
 	ErrIncorrectUserCredentials = errors.New("user credentials isn`t valid")
 )
 
+type Username string
+
 type AuthRequest struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
@@ -182,7 +184,7 @@ func (a *Auth) AuthMiddleWare(h http.HandlerFunc) http.HandlerFunc {
 			zap.String("userID", claims["userID"].(string)),
 		)
 
-		ctx := context.WithValue(r.Context(), "userID", claims["userID"])
+		ctx := context.WithValue(r.Context(), Username("userID"), claims["userID"])
 
 		h(w, r.WithContext(ctx))
 	})
