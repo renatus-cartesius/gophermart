@@ -11,23 +11,23 @@ import (
 	"go.uber.org/zap"
 )
 
-func (l *PGStorage) AddOrder(ctx context.Context, userID string, orderInfo *accrual.OrderInfo) error {
+func (l *PGStorage) AddOrder(ctx context.Context, userID string, orderID string) error {
 
 	logger.Log.Debug(
 		"begin adding order to storage",
-		zap.String("orderID", orderInfo.Order),
+		zap.String("orderID", orderID),
 	)
 
 	// Check if order already in db by that user
 	var uID string
 
-	existingOrderRow := l.db.QueryRowContext(ctx, "SELECT userID FROM orders WHERE id = $1", orderInfo.Order)
+	existingOrderRow := l.db.QueryRowContext(ctx, "SELECT userID FROM orders WHERE id = $1", orderID)
 
 	err := existingOrderRow.Err()
 
 	logger.Log.Debug(
 		"checked order in storage",
-		zap.String("orderID", orderInfo.Order),
+		zap.String("orderID", orderID),
 		zap.Error(err),
 	)
 
@@ -43,10 +43,10 @@ func (l *PGStorage) AddOrder(ctx context.Context, userID string, orderInfo *accr
 		if errors.Is(err, sql.ErrNoRows) {
 			logger.Log.Debug(
 				"inserting order to database",
-				zap.String("orderID", orderInfo.Order),
+				zap.String("orderID", orderID),
 				zap.Error(err),
 			)
-			_, err = l.db.ExecContext(ctx, "INSERT INTO orders (id, userID, status, accrual) VALUES ($1, $2, $3, $4)", orderInfo.Order, userID, orderInfo.Status, orderInfo.Accrual)
+			_, err = l.db.ExecContext(ctx, "INSERT INTO orders (id, userID, status) VALUES ($1, $2, 'NEW')", orderID, userID)
 			return err
 		}
 
@@ -143,7 +143,7 @@ func (l *PGStorage) GetOrder(ctx context.Context, orderID string) (*loyalty.Orde
 func (l *PGStorage) GetBalance(ctx context.Context, userID string) (*loyalty.Balance, error) {
 	row := l.db.QueryRowContext(ctx, `
 		select 
-			((select COALESCE(SUM(accrual), 0) from orders where userID = $1) -
+			((select COALESCE(SUM(accrual), 0) from orders where userID = $1 and status = 'PROCESSED') -
 			(select COALESCE(SUM(sum), 0) from withdrawals where userID = $1)) as balance,
 			(select COALESCE(SUM(sum), 0) from withdrawals where userID = $1) as withdrawn;
 		;
@@ -163,5 +163,36 @@ func (l *PGStorage) GetBalance(ctx context.Context, userID string) (*loyalty.Bal
 
 func (l *PGStorage) AddWithdraw(ctx context.Context, wr *loyalty.Withdraw) error {
 	_, err := l.db.ExecContext(ctx, "INSERT INTO withdrawals (orderID, userID, sum) VALUES ($1, $2, $3)", wr.OrderID, wr.UserID, wr.Sum)
+	return err
+}
+
+func (l *PGStorage) GetUnhandledOrders(ctx context.Context) ([]string, error) {
+	orders := make([]string, 0)
+
+	rows, err := l.db.QueryContext(ctx, "SELECT id from orders where status != 'PROCESSED' and status != 'INVALID'")
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var orderID string
+		if err := rows.Scan(&orderID); err != nil {
+			logger.Log.Debug(
+				"error on scanning row to string",
+				zap.Error(err),
+			)
+			continue
+		}
+		orders = append(orders, orderID)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return orders, nil
+}
+func (l *PGStorage) UpdateOrder(ctx context.Context, orderInfo *accrual.OrderInfo) error {
+	_, err := l.db.ExecContext(ctx, "UPDATE orders SET status=$1, accrual=$2 WHERE id=$3", orderInfo.Status, orderInfo.Accrual, orderInfo.Order)
 	return err
 }

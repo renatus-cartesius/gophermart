@@ -70,11 +70,13 @@ func main() {
 
 	pgStorage := storage.NewPGStorage(db)
 
+	l := loyalty.NewLoyalty(
+		a,
+		pgStorage,
+	)
+
 	srv := handlers.NewServerHandler(
-		loyalty.NewLoyalty(
-			a,
-			pgStorage,
-		),
+		l,
 		auth.NewAuth(
 			[]byte("d6b32087c4b1f7c8b88c945234d54cfa5aa73d4b14e5e7a778448d515db00028b20db"),
 			pgStorage,
@@ -88,6 +90,10 @@ func main() {
 
 	shutdownSig := make(chan os.Signal, 1)
 	signal.Notify(shutdownSig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	dispatchContext, dispatchContextCancel := context.WithCancel(context.Background())
+	defer dispatchContextCancel()
+	go l.Dispatch(dispatchContext)
 
 	go func() {
 		<-shutdownSig

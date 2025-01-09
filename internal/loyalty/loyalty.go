@@ -6,9 +6,14 @@ import (
 	"strconv"
 
 	"github.com/renatus-cartesius/gophermart/internal/accrual"
-	"github.com/renatus-cartesius/gophermart/pkg/logger"
 	"github.com/renatus-cartesius/gophermart/pkg/luhn"
-	"go.uber.org/zap"
+)
+
+const (
+	TypeStatusNew        = "New"
+	TypeStatusInvalid    = "INVALID"
+	TypeStatusProcessing = "PROCESSING"
+	TypeStatusProcessed  = "PROCESSED"
 )
 
 var (
@@ -28,12 +33,14 @@ type Balance struct {
 }
 
 type LoyaltyStorager interface {
-	AddOrder(ctx context.Context, userID string, orderInfo *accrual.OrderInfo) error
+	AddOrder(ctx context.Context, userID string, orderID string) error
 	GetOrders(ctx context.Context, userID string) ([]*Order, error)
 	GetWithdrawals(ctx context.Context, userID string) ([]*Withdraw, error)
 	GetOrder(ctx context.Context, orderID string) (*Order, error)
 	GetBalance(ctx context.Context, userID string) (*Balance, error)
 	AddWithdraw(ctx context.Context, wr *Withdraw) error
+	GetUnhandledOrders(ctx context.Context) ([]string, error)
+	UpdateOrder(ctx context.Context, orderInfo *accrual.OrderInfo) error
 }
 
 type Loyalty struct {
@@ -59,36 +66,7 @@ func (l *Loyalty) UploadOrder(ctx context.Context, userID string, orderID string
 		return ErrOrderInvalid
 	}
 
-	// Checking if order is already uploaded
-
-	order, err := l.storage.GetOrder(ctx, orderID)
-	if err != nil {
-
-		if errors.Is(err, ErrOrderNotFound) {
-
-			logger.Log.Debug(
-				"order not found in storage, checking in accrual",
-				zap.String("orderID", orderID),
-			)
-
-			// Need to check what error is (204, 429, 500)
-			orderInfo, err := l.accrual.GetOrder(ctx, orderID)
-			if err != nil {
-				return err
-			}
-
-			// Checking if order is has already been uploaded to db but that user or another
-			return l.storage.AddOrder(ctx, userID, orderInfo)
-		}
-
-		return err
-	}
-
-	if order.UserID == userID {
-		return ErrOrderAlreadyUploaded
-	} else {
-		return ErrOrderUploadedAnotherUser
-	}
+	return l.storage.AddOrder(ctx, userID, orderID)
 
 }
 

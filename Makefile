@@ -12,3 +12,7 @@ mocks:
 .PHONY: server-run
 server-run:
 	@go run cmd/gophermart/main.go
+
+.PHONY: server-build
+server-build:
+	@(cd cmd/gophermart && go build -buildvcs=false -o gophermart)
