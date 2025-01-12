@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -21,20 +20,14 @@ func Setup(r *chi.Mux, srv *ServerHandler) {
 		r.Route("/user", func(r chi.Router) {
 			r.Get("/orders", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.GetOrders))))
 			r.Get("/withdrawals", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.GetWithdrawals))))
-			r.Post("/orders", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.UploadOrder))))
+			r.Post("/orders", middlewares.ValidateJSON(middlewares.ValidateNumber(srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.UploadOrder))))))
 			r.Route("/balance", func(r chi.Router) {
 				r.Get("/", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.GetBalance))))
-				r.Post("/withdraw", srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.Withdraw))))
+				r.Post("/withdraw", middlewares.ValidateJSON(srv.a.AuthMiddleWare(middlewares.Gzipper(logger.RequestLogger(srv.Withdraw)))))
 			})
-			r.Post("/register", middlewares.Gzipper(logger.RequestLogger(srv.RegisterUser)))
-			r.Post("/login", middlewares.Gzipper(logger.RequestLogger(srv.LoginUser)))
+			r.Post("/register", middlewares.ValidateJSON(middlewares.Gzipper(logger.RequestLogger(srv.RegisterUser))))
+			r.Post("/login", middlewares.ValidateJSON(middlewares.Gzipper(logger.RequestLogger(srv.LoginUser))))
 		})
-		// 	r.Get("/ping", middlewares.Gzipper(logger.RequestLogger(srv.Ping)))
-		// 	r.Post("/updates/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdatesJSON))))
-		// 	r.Route("/update", func(r chi.Router) {
-		// 		r.Post("/", middlewares.HmacValidator(hashKey, middlewares.Gzipper(logger.RequestLogger(srv.UpdateJSON))))
-		// 		r.Post("/{type}/{id}/{value}", middlewares.Gzipper(logger.RequestLogger(srv.Update)))
-		// 	})
 	})
 }
 
@@ -121,8 +114,6 @@ func (s ServerHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 func (s ServerHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(auth.Username("userID")).(string)
 
-	var buf bytes.Buffer
-
 	orders, err := s.l.GetOrders(r.Context(), userID)
 	if err != nil {
 		logger.Log.Error(
@@ -133,7 +124,9 @@ func (s ServerHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := json.NewEncoder(&buf).Encode(orders); err != nil {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(orders); err != nil {
 		logger.Log.Error(
 			"error on marshalling orders for user",
 			zap.String("userID", userID),
@@ -142,17 +135,12 @@ func (s ServerHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(buf.Bytes())
 }
 
 func (s ServerHandler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(auth.Username("userID")).(string)
 
-	var buf bytes.Buffer
-
-	orders, err := s.l.GetWithdrawals(r.Context(), userID)
+	withdrawals, err := s.l.GetWithdrawals(r.Context(), userID)
 	if err != nil {
 		logger.Log.Error(
 			"error on getting withdrawals from loyalty storage",
@@ -162,7 +150,9 @@ func (s ServerHandler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := json.NewEncoder(&buf).Encode(orders); err != nil {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(withdrawals); err != nil {
 		logger.Log.Error(
 			"error on marshalling withdrawals for user",
 			zap.String("userID", userID),
@@ -171,9 +161,6 @@ func (s ServerHandler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(buf.Bytes())
 }
 
 func (s ServerHandler) UploadOrder(w http.ResponseWriter, r *http.Request) {
@@ -240,9 +227,9 @@ func (s ServerHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var buf bytes.Buffer
-
-	if err := json.NewEncoder(&buf).Encode(balance); err != nil {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(balance); err != nil {
 		logger.Log.Error(
 			"error when marshalling balance",
 			zap.Error(err),
@@ -251,9 +238,6 @@ func (s ServerHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(buf.Bytes())
 }
 
 func (s ServerHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
