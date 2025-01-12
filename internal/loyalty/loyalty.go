@@ -112,15 +112,5 @@ func (l *Loyalty) Withdraw(ctx context.Context, wr *Withdraw) error {
 		return ErrOrderInvalid
 	}
 
-	// Check if user has enough points for withdraw
-	balance, err := l.GetBalance(ctx, wr.UserID)
-	if err != nil {
-		return err
-	}
-
-	if wr.Sum > balance.Current {
-		return ErrWithdrawNotEnoughPoints
-	}
-
 	return l.storage.AddWithdraw(ctx, wr)
 }

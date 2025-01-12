@@ -162,7 +162,36 @@ func (pg *PGStorage) GetBalance(ctx context.Context, userID string) (*loyalty.Ba
 }
 
 func (pg *PGStorage) AddWithdraw(ctx context.Context, wr *loyalty.Withdraw) error {
-	_, err := pg.db.ExecContext(ctx, "INSERT INTO withdrawals (orderID, userID, sum) VALUES ($1, $2, $3)", wr.OrderID, wr.UserID, wr.Sum)
+	tx, err := pg.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Getting current balance
+	row := pg.db.QueryRowContext(ctx, `
+		select
+			((select COALESCE(SUM(accrual), 0) from orders where userID = $1 and status = $2) -
+			(select COALESCE(SUM(sum), 0) from withdrawals where userID = $1)) as balance,
+			(select COALESCE(SUM(sum), 0) from withdrawals where userID = $1) as withdrawn;
+		;
+	`, wr.UserID, loyalty.TypeStatusProcessed)
+
+	balance := &loyalty.Balance{}
+
+	err = row.Scan(&balance.Current, &balance.Withdrawn)
+	if err != nil {
+		logger.Log.Debug(
+			"error on scanning to row to balance",
+		)
+		return err
+	}
+
+	if wr.Sum > balance.Current {
+		return loyalty.ErrWithdrawNotEnoughPoints
+	}
+
+	_, err = pg.db.ExecContext(ctx, "INSERT INTO withdrawals (orderID, userID, sum) VALUES ($1, $2, $3)", wr.OrderID, wr.UserID, wr.Sum)
 	return err
 }
 
