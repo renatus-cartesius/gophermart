@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+  go-dev:
+    # Using a Dockerfile is optional, but included for completeness.
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    volumes:
+      # This is where VS Code should expect to find your project's source code and the value of "workspaceFolder" in .devcontainer/devcontainer.json
+      - ..:/workspace:cached
+      - /run/docker.sock:/run/docker.sock
+
+    # Overrides default command so things don't shut down after the process ends.
+    command: /bin/sh -c "while sleep 1000; do :; done"
+
+    # Runs app on the same network as the service container, allows "forwardPorts" in devcontainer.json function.
+    # network_mode: service:another-service
+    networks:
+      - dev_net
+
+    # Uncomment the next four lines if you will use a ptrace-based debugger like C++, Go, and Rust.
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+
+networks:
+  dev_net:
+    name: dev-net
+    external: true

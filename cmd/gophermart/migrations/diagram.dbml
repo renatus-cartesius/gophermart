@@ -1,0 +1,29 @@
+// Use DBML to define your database structure
+// Docs: https://dbml.dbdiagram.io/docs
+// Usage: https://dbdiagram.io/d
+
+Table orders {
+  id integer [primary key]
+  userID uuid
+  status enum
+  accrual float
+  uploaded timestamp 
+}
+
+Table users {
+  id uuid [primary key]
+  passwordHash string
+}
+
+Table withdrawals {
+  orderID integer [primary key]
+  userID integer
+  amount float
+  time timestamp
+}
+
+Ref: orders.userID > users.id
+
+Ref: withdrawals.userID > users.id
+
+Ref: withdrawals.orderID > orders.id

@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  pg-db:
+    container_name: pg-db
+    image: postgres:16-bullseye
+    volumes:
+      - /opt/docker/yapracticum/pg-db:/var/lib/postgresql
+    networks:
+      - dev_net
+    ports:
+      - 15432:5432
+    environment:
+      POSTGRES_PASSWORD: dummy
+      POSTGRES_USER: gophermart_owner
+      POSTGRES_DB: gophermart
+
+networks:
+  dev_net:
+    name: dev-net
+    external: true
